@@ -1,46 +1,52 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from models.message import Message
 from schemas.message import MessageCreate, MessageRead, MessageUpdate
 from typing import List, Optional
 
 #get message 
-def get_message_by_id(message_id: int, db: Session) -> Optional[MessageRead]:
-    db_message = db.query(Message).filter(Message.id == message_id).first()
+async def get_message_by_id(message_id: int, db: AsyncSession) -> Optional[MessageRead]:
+    message = await db.execute(select(Message).filter(Message.id == message_id))
+    db_message = message.scalars().first()
     if db_message:
         return MessageRead.from_orm(db_message)
     return None
 
 #get messages
-def get_messages(db: Session) -> List[MessageRead]:
-    return db.query(Message).all()
+async def get_messages(db: AsyncSession) -> List[MessageRead]:
+    messages = await db.execute(select(Message))
+    db_messages = messages.scalars.all()
+    return [MessageRead.from_orm(message) for message in db_messages]
 
 #Create message
-def create_message(message_create: MessageCreate, db: Session) -> Optional[MessageRead]:
+async def create_message(message_create: MessageCreate, db: AsyncSession) -> Optional[MessageRead]:
     new_message = Message(**message_create.dict())
 
     db.add(new_message)
-    db.commit()
-    db.refresh(new_message)
+    await db.commit()
+    await db.refresh(new_message)
 
     return new_message
 
 #Update message
-def update_message(message_id: int, message_update: MessageUpdate, db:Session) -> Optional[MessageRead]:
-    db_message = get_message_by_id(message_id, db)
+async def update_message(
+        message_id: int, message_update: MessageUpdate,
+        db:AsyncSession) -> Optional[MessageRead]:
+    db_message = await get_message_by_id(message_id, db)
     if not db_message:
         return None
     if message_update.content:
         db_message.content = message_update.content
-    db.commit()
-    db.refresh(db_message)
+    await db.commit()  
+    await db.refresh(db_message)  
     return db_message
     
 #Delete message
-def delete_message(message_id: int, db: Session) -> Optional[MessageRead]:
-    db_message = get_message_by_id(message_id, db)
+async def delete_message(message_id: int, db: AsyncSession) -> Optional[MessageRead]:
+    db_message = await get_message_by_id(message_id, db)
     if not db_message:
         return None
     
-    db.delete(db_message)
-    db.commit()
+    await db.delete(db_message)
+    await db.commit()
     return db_message

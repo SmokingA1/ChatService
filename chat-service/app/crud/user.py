@@ -1,21 +1,27 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from models.user import User
 from schemas.user import UserCreate, UserUpdate, UserRead
 from typing import List
 #get user 
-def get_user_by_id(user_id: int, db: Session) -> UserRead:
-    return db.query(User).filter(User.id == user_id).first()
+async def get_user_by_id(user_id: int, db: AsyncSession) -> UserRead:
+    user = await db.execute(select(User).filter(User.id == user_id)) 
+    db_user = user.scalars().first()
+    return UserRead.from_orm(db_user)
 
 #get all users
-def get_users(db: Session):
-    return db.query(User).all()
+async def get_users(db: AsyncSession) -> List[UserRead]:
+    users = await db.execute(select(User))
+    db_users = users.scalars().all()
+    return [UserRead.from_orm(user) for user in db_users]
 
 #create user
-def create_user(user: UserCreate, db: Session) -> List[UserRead]:
+async def create_user(user: UserCreate, db: AsyncSession) -> UserRead:
     new_user = User(**user.dict())
     try:
-        db.commit()
-        db.refresh(new_user)
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
     except:
         db.rollback()
         raise ValueError("Error creating user, check data.")
@@ -23,23 +29,22 @@ def create_user(user: UserCreate, db: Session) -> List[UserRead]:
     return new_user
 
 #update user
-def update_user(user_update: UserUpdate, user_id: int, db: Session) -> UserRead:
-    db_user = get_user_by_id(user_id, db)
+async def update_user(user_update: UserUpdate, user_id: int, db: AsyncSession) -> UserRead:
+    db_user = await get_user_by_id(user_id, db)
     if not db_user:
         return None
-
     for key, value in user_update.dict(exclude_unset=True).items():
         setattr(db_user, key, value)
     
-    db.commit()
-    db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
     return db_user
 
 #delete user
-def delete_user(user_id: int, db:Session) -> UserRead:
-    db_user = get_user_by_id(user_id, db)
+async def delete_user(user_id: int, db:AsyncSession) -> UserRead:
+    db_user = await get_user_by_id(user_id, db)
     if not db_user:
         return None
-    db.delete(db_user)
-    db.commit()
+    await db.delete(db_user)
+    await db.commit()
     return db_user
