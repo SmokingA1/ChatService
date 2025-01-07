@@ -1,1 +1,0 @@
-This is just another typical poor student's bad project.
